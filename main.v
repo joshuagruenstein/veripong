@@ -120,30 +120,30 @@ module pong(btns, auto, background, pclk, hsync, vsync, red, green, blue);
             if (pixel_x > PADDLE_LEFT && pixel_x < PADDLE_LEFT+PADDLE_WIDTH &&
                 pixel_y > paddle1_pos && pixel_y < paddle1_pos+PADDLE_HEIGHT) begin
                 red = 31;
-                blue = 31;
-                green = 63;
+                blue = 0;
+                green = 0;
             end
             
             // PADDLE 2
             else if (pixel_x > PADDLE_RIGHT && pixel_x < PADDLE_RIGHT+PADDLE_WIDTH && 
                      pixel_y > paddle2_pos && pixel_y < paddle2_pos+PADDLE_HEIGHT) begin
                 red = 31;
-                blue = 31;
-                green = 63;
+                blue = 0;
+                green = 0;
             end
             
             // BALL
             else if (pixel_x > ball_x && pixel_x < ball_x + BALL_WIDTH &&
                      pixel_y > ball_y && pixel_y < ball_y + BALL_WIDTH) begin
-                red = 31;
-                blue = 31;
+                red = 0;
+                blue = 0;
                 green = 63;
             end
             
             // BACKGROUND
             else begin
                red = 0;
-               blue = 0;
+               blue = 31;
                green = 0;
             end
             
@@ -153,4 +153,5 @@ module pong(btns, auto, background, pclk, hsync, vsync, red, green, blue);
             green = 0;
         end
     end
+
 endmodule
