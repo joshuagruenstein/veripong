@@ -22,53 +22,12 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
     parameter VBP = 31;
     parameter VFP = 511;
 
-    // PIXEL MEMORY
-    reg[319:0] pixels[0:239];
-    
-    // PIXEL COUNTERS
-    reg[9:0] hcount;
-    reg[9:0] vcount;
-        
-    reg[3:0] counter;
-    always @(posedge pclk)  begin
-        if (counter == 4) begin
-            if (hcount < H_PIXELS-1) hcount <= hcount + 1;
-            else begin
-                hcount = 0;
-                vcount = (vcount < V_LINES-1) ? vcount+1 : 0;
-            end counter <= 0;
-        end else counter <= counter + 1;
-    end
-    
-    assign hsync = hcount >= H_PULSE;
-    assign vsync = vcount >= V_PULSE;
-    
-    reg[319:0] render_temp;
-    reg pixel_temp;
-    always @(vcount or hcount) begin
-        if (vcount >= VBP && vcount < VFP && hcount >= HBP && hcount < HFP) begin
-            render_temp = pixels[(vcount-VBP)>>1];
-            pixel_temp = render_temp[(hcount-HBP)>>1];
-            blue = pixel_temp ? 31:0;
-            red = pixel_temp ? 31:0;
-            green = pixel_temp ? 63:0;
-            //red <= 31; blue <= 31; green <= 63;
-        end else begin
-            red = 0;
-            blue = 0;
-            green = 0;
-        end
-    end
-    
-    reg[319:0] temp;    
-    
-    // PADDLE
+        // PADDLE
     parameter PADDLE_WIDTH = 5;
     parameter PADDLE_HEIGHT = 30;
     parameter PADDLE_LEFT = 20;
     parameter PADDLE_RIGHT = 320-PADDLE_LEFT-PADDLE_WIDTH;
     parameter PADDLE_START = 100;
-    
     
     reg[8:0] paddle1_pos = 100;
     reg[8:0] paddle2_pos = 100;
@@ -88,10 +47,14 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
     // TIMING AND COUNTERS
     reg[8:0] row_counter;
     reg[9:0] column_counter;
-    reg[3:0] divider;
+    reg[19:0] action_divider = 1;
+    reg[9:0] hcount;
+    reg[9:0] vcount;
+    reg[3:0] counter;
     
     reg reset = 1;
-    always @(posedge pclk) begin
+    
+    always @(posedge pclk)  begin
         if (reset) begin
             paddle1_pos = PADDLE_START;
             paddle2_pos = PADDLE_START;
@@ -102,39 +65,14 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
             reset = 0;
         end
         
-        if (divider == 0) begin
-            if (btns[0] && paddle1_pos+PADDLE_HEIGHT<239) paddle1_pos = paddle1_pos + 1;
-            else if (btns[1] && paddle1_pos>0) paddle1_pos = paddle1_pos - 1;
-            
-            //if (!auto) begin
-                if (btns[2] && paddle2_pos+PADDLE_HEIGHT<239) paddle2_pos = paddle2_pos + 1;
-                else if (btns[3] && paddle2_pos>0) paddle2_pos = paddle2_pos - 1;
-            //end else paddle2_pos = (ball_y > 223) ? 223 : ((ball_y < 17) ? 17 : ball_y - 15);
-            
-            
-            if (vel_x >= 2) ball_x = ball_x + (vel_x-1);
-            else if (vel_x < 2) ball_x = ball_x - (2-vel_x);
-            if (vel_y >= 2) ball_y = ball_y + (vel_y-1);
-            else if (vel_y < 2) ball_y = ball_y - (2-vel_y);
-            
-            divider = 1;
-         end
+        if (counter == 4) begin
+            if (hcount < H_PIXELS-1) hcount <= hcount + 1;
+            else begin
+                hcount = 0;
+                vcount = (vcount < V_LINES-1) ? vcount+1 : 0;
+            end counter <= 0;
+        end else counter <= counter + 1;
         
-        temp = pixels[row_counter];
-        
-        if (
-            (column_counter > PADDLE_LEFT && column_counter < PADDLE_LEFT+PADDLE_WIDTH && // PADDLE 1
-             row_counter > paddle1_pos && row_counter < paddle1_pos+PADDLE_HEIGHT) ||
-            (column_counter > PADDLE_RIGHT && column_counter < PADDLE_RIGHT+PADDLE_WIDTH && // PADDLE 2
-             row_counter > paddle2_pos && row_counter < paddle2_pos+PADDLE_HEIGHT) ||
-            (column_counter > ball_x && column_counter < ball_x + BALL_WIDTH &&
-             row_counter > ball_y && row_counter < ball_y + BALL_WIDTH) // BALL
-           ) temp[column_counter] = !background; 
-        else temp[column_counter] = background;
-        
-        pixels[row_counter] = temp;
-        
-        // PADDLE/GOAL DETECTION
         if (ball_x < PADDLE_LEFT + PADDLE_WIDTH && vel_x < 2) begin // behind bounds left
             if (ball_x > PADDLE_LEFT && ball_y > paddle1_pos && ball_y < paddle1_pos + PADDLE_HEIGHT) begin
                 vel_x = 3 - vel_x;
@@ -147,14 +85,71 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
             vel_y = 3 - vel_y;  // WALL COLLISION DETECTION
         end
         
-        if (column_counter > 318) begin
-            row_counter = row_counter + 1;
-            column_counter = 0;
-        end else column_counter = column_counter + 1;
-        
-        if (row_counter > 238) begin
-            row_counter = 0;
-            divider = divider + 1;
+        if (action_divider == 0) begin
+            if (btns[0] && paddle1_pos+PADDLE_HEIGHT<239) paddle1_pos = paddle1_pos + 1;
+            else if (btns[1] && paddle1_pos>0) paddle1_pos = paddle1_pos - 1;
+            
+            //if (!auto) begin
+                if (btns[2] && paddle2_pos+PADDLE_HEIGHT<239) paddle2_pos = paddle2_pos + 1;
+                else if (btns[3] && paddle2_pos>0) paddle2_pos = paddle2_pos - 1;
+            //end else paddle2_pos = (ball_y > 223) ? 223 : ((ball_y < 17) ? 17 : ball_y - 15);
+            
+            if (vel_x >= 2) ball_x = ball_x + (vel_x-1);
+            else if (vel_x < 2) ball_x = ball_x - (2-vel_x);
+            if (vel_y >= 2) ball_y = ball_y + (vel_y-1);
+            else if (vel_y < 2) ball_y = ball_y - (2-vel_y);
+            
+        end
+    
+        action_divider <= action_divider + 1;
+    end
+    
+    assign hsync = hcount >= H_PULSE;
+    assign vsync = vcount >= V_PULSE;
+    
+    reg[9:0] pixel_x;
+    reg[8:0] pixel_y;
+    
+    always @(vcount or hcount) begin
+        if (vcount >= VBP && vcount < VFP && hcount >= HBP && hcount < HFP) begin
+            pixel_x = (hcount - HBP) >> 1;
+            pixel_y = (vcount - VBP) >> 1;
+            
+            if (pixel_x > PADDLE_LEFT && pixel_x < PADDLE_LEFT+PADDLE_WIDTH &&
+                pixel_y > paddle1_pos && pixel_y < paddle1_pos+PADDLE_HEIGHT) begin
+                red = 31;
+                blue = 31;
+                green = 63;
+            end
+            
+            else if (pixel_x > PADDLE_RIGHT && pixel_x < PADDLE_RIGHT+PADDLE_WIDTH && 
+                     pixel_y > paddle2_pos && pixel_y < paddle2_pos+PADDLE_HEIGHT) begin
+                // PADDLE 2
+                red = 31;
+                blue = 31;
+                green = 63;
+            end
+            
+            else if (pixel_x > ball_x && pixel_x < ball_x + BALL_WIDTH &&
+                     pixel_y > ball_y && pixel_y < ball_y + BALL_WIDTH) begin
+                // BALL
+                red = 31;
+                blue = 31;
+                green = 63;
+            end
+            
+            else begin
+               // BACKGROUND
+               red = 0;
+               blue = 0;
+               green = 0;
+            end
+            
+        end else begin
+            red = 0;
+            blue = 0;
+            green = 0;
         end
     end
+    
 endmodule
