@@ -13,6 +13,8 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
     output reg[5:0] green;
     
     // VGA CONSTANTS
+    parameter WINDOW_HEIGHT = 480;
+    parameter WINDOW_WIDTH = 640;
     parameter H_PIXELS = 800;
     parameter V_LINES = 521;
     parameter H_PULSE = 96;
@@ -23,31 +25,29 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
     parameter VFP = 511;
 
         // PADDLE
-    parameter PADDLE_WIDTH = 5;
-    parameter PADDLE_HEIGHT = 30;
-    parameter PADDLE_LEFT = 20;
-    parameter PADDLE_RIGHT = 320-PADDLE_LEFT-PADDLE_WIDTH;
-    parameter PADDLE_START = 100;
+    parameter PADDLE_WIDTH = 10;
+    parameter PADDLE_HEIGHT = 60;
+    parameter PADDLE_LEFT = 40;
+    parameter PADDLE_RIGHT = 640-PADDLE_LEFT-PADDLE_WIDTH;
+    parameter PADDLE_START = 200;
     
-    reg[8:0] paddle1_pos = 100;
-    reg[8:0] paddle2_pos = 100;
+    reg[8:0] paddle1_pos;
+    reg[8:0] paddle2_pos;
     
     // BALL
-    parameter BALL_WIDTH = 3;
-    parameter BALL_START_X = 158;
-    parameter BALL_START_Y = 105;
+    parameter BALL_WIDTH = 6;
+    parameter BALL_START_X = 316;
+    parameter BALL_START_Y = 210;
     parameter VEL_START_X = 1;
     parameter VEL_START_Y = 3;
     
-    reg[8:0] ball_y;
-    reg[9:0] ball_x;
+    reg[9:0] ball_y;
+    reg[10:0] ball_x;
     reg[1:0] vel_x = 1;
     reg[1:0] vel_y = 3;
     
     // TIMING AND COUNTERS
-    reg[8:0] row_counter;
-    reg[9:0] column_counter;
-    reg[19:0] action_divider = 1;
+    reg[18:0] action_divider;
     reg[9:0] hcount;
     reg[9:0] vcount;
     reg[3:0] counter;
@@ -81,40 +81,40 @@ module vga(btns, auto, background, pclk, hsync, vsync, red, green, blue);
             if (ball_x < PADDLE_RIGHT + PADDLE_WIDTH && ball_y > paddle2_pos && ball_y < paddle2_pos + PADDLE_HEIGHT) begin
                 vel_x = 3 - vel_x;
             end else reset = 1;
-        end else if ((ball_y < 2 && vel_y < 2) || (ball_y > 237 && vel_y > 1)) begin
+        end else if ((ball_y < 2 && vel_y < 2) || (ball_y > WINDOW_HEIGHT-BALL_WIDTH && vel_y > 1)) begin
             vel_y = 3 - vel_y;  // WALL COLLISION DETECTION
         end
         
         if (action_divider == 0) begin
-            if (btns[0] && paddle1_pos+PADDLE_HEIGHT<239) paddle1_pos = paddle1_pos + 1;
+            if (btns[0] && paddle1_pos+PADDLE_HEIGHT<WINDOW_HEIGHT-1) paddle1_pos = paddle1_pos + 1;
             else if (btns[1] && paddle1_pos>0) paddle1_pos = paddle1_pos - 1;
             
-            //if (!auto) begin
-                if (btns[2] && paddle2_pos+PADDLE_HEIGHT<239) paddle2_pos = paddle2_pos + 1;
+            if (!auto) begin
+                if (btns[2] && paddle2_pos+PADDLE_HEIGHT<WINDOW_HEIGHT-1) paddle2_pos = paddle2_pos + 1;
                 else if (btns[3] && paddle2_pos>0) paddle2_pos = paddle2_pos - 1;
-            //end else paddle2_pos = (ball_y > 223) ? 223 : ((ball_y < 17) ? 17 : ball_y - 15);
+            end else paddle2_pos = (ball_y > WINDOW_HEIGHT - PADDLE_HEIGHT/2) ? 
+                                        WINDOW_HEIGHT-PADDLE_HEIGHT : 
+                                        ((ball_y < PADDLE_HEIGHT/2 + 2) ? 2 : ball_y - PADDLE_HEIGHT/2);
             
             if (vel_x >= 2) ball_x = ball_x + (vel_x-1);
             else if (vel_x < 2) ball_x = ball_x - (2-vel_x);
             if (vel_y >= 2) ball_y = ball_y + (vel_y-1);
             else if (vel_y < 2) ball_y = ball_y - (2-vel_y);
             
-        end
-    
-        action_divider <= action_divider + 1;
+        end action_divider <= action_divider + 1;
     end
     
     assign hsync = hcount >= H_PULSE;
     assign vsync = vcount >= V_PULSE;
     
-    reg[9:0] pixel_x;
-    reg[8:0] pixel_y;
+    wire[10:0] pixel_x;
+    wire[9:0] pixel_y;
+    
+    assign pixel_x = hcount - HBP;
+    assign pixel_y = vcount - VBP;
     
     always @(vcount or hcount) begin
-        if (vcount >= VBP && vcount < VFP && hcount >= HBP && hcount < HFP) begin
-            pixel_x = (hcount - HBP) >> 1;
-            pixel_y = (vcount - VBP) >> 1;
-            
+        if (vcount >= VBP && vcount < VFP && hcount >= HBP && hcount < HFP) begin            
             if (pixel_x > PADDLE_LEFT && pixel_x < PADDLE_LEFT+PADDLE_WIDTH &&
                 pixel_y > paddle1_pos && pixel_y < paddle1_pos+PADDLE_HEIGHT) begin
                 red = 31;
